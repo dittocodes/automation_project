@@ -1,1 +1,87 @@
+#!/bin/bash
+s3_bucket='ditto9497assignment'
+myname='mohan'
+timestamp=$(date +"%d%m%Y-%H%M%S")
+logtype='httpd-logs'
+Datecreated=$(date +"%d%m%Y-%H%M%S")
+type='tar'
 
+
+echo "===============================> Update <==================================================="
+sudo apt update -y
+
+echo "===============================> Checking if apache2 is installed <============================"
+if [[ apache2 != $(dpkg --get-selections apache2 | awk '{print $1}') ]] ; then
+        echo "already installed : $(dpkg-query -W -f='${Version}\n' apache2)"
+else
+   echo "Installing"
+sudo apt install apache2 -y
+fi
+
+echo "===============================> Active check  <==================================="
+running=$(systemctl status apache2 | grep active | awk '{print $3}' | tr -d '()')
+if [[ running != ${running} ]]; then
+    echo "apache2 is not running !! restarting"
+    systemctl restart apache2
+
+fi
+
+echo "===============================> enable checking <==========================================="
+if [[ $(systemctl list-unit-files | grep apache2.service | awk '{ print $2}') ==  "enabled" ]] ; then
+        echo "enabled"
+else
+        echo "enabling"
+        systemctl enable apache2
+fi
+
+echo "==================================> making tar of log files <================================"
+cd /var/log/apache2
+tar -cf /tmp/${myname}-httpd-logs-${timestamp}.tar *.log
+echo "done collecting logs"
+
+
+
+echo "===================================> copying to s3 <========================================="
+if [[ -f /tmp${myname}-httpd-logs-${timestamp}.tar ]]; then
+aws s3  cp /tmp/${myname}-${logtype}-${timestamp}.$type s3://${s3_bucket}/${myname}-$logtype-${timestamp}.$type
+
+fi
+
+
+
+echo "===================================> on to webserver <======================================="
+if [[ ! -f /var/www/html/inventory.html ]];then
+echo "File is found"
+else
+
+        echo "File creating ..........."
+        cat >>/var/www/html/inventory.html << EOF
+<table width="20%" cellspacing="0" cellpadding="5">
+        <thead>
+            <h4><th>Log Type </th></h4>
+            <h4><th>Time Created </th></h4>
+            <h4><th>Type </th></h4>
+            <h4><th>Size </th><h4>
+        </thead>
+</table>
+EOF
+fi
+
+size=$(du -h /tmp/$myname-httpd-logs-${timestamp}.tar | awk '{print $1}')
+  echo -e "httpd-logs\t-\t${timestamp}\t\ttar\t-\t${size}" >> /var/www/html/inventory.html << EOF
+fi
+
+size=$(du -h /tmp/$myname-httpd-logs-${timestamp}.tar | awk '{print $1}')
+  echo -e "httpd-logs\t-\t${timestamp}\t\ttar\t-\t${size}" >> /var/www/html/inventory.html << EOF
+fi
+<table width="20%" cellspacing="0" cellpadding="5">
+        <tbody>
+       <tr>
+       <td>$logtype</td>
+       <td>$Datecreated</td>
+       <td>$type</td>
+       <td>$size</td>
+       </tr>
+       </tbody>
+</table>
+EOF
